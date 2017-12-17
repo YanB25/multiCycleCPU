@@ -102,7 +102,8 @@ module CPU (
         .RegWriteSrc(RegWriteSrc),
         .IRWrite(IRWrite),
         .state(state),
-        .pcWrite(pcWrite)
+        .pcWrite(pcWrite),
+        .nRST(RST)
     );
 
     

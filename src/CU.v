@@ -81,7 +81,7 @@ module CU (
     // DB
     assign DB = (Op == `opLW) ? `FromDM : `FromALU;
     //RegWr
-    assign RegWr = (state == `sWB || Op == `opJAL) ? 1 : 0;
+    assign RegWr = (state == `sWB || (Op == `opJAL && state == `sID)) ? 1 : 0;
     // nRD
     assign nRD = (Op == `opLW && state == `sMEM) ? 0 : 1;
     // nWR
