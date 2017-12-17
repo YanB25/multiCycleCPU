@@ -25,12 +25,20 @@ module CPU (
         .sel(PCSel),
         .newpc(newpc)
     );
-    wire [31:0]ins;
+    wire [31:0] ins;
     wire romnrd = 0;
     ROM rom(
         .nrd(romnrd),
         .addr(pc),
         .dataOut(ins)
+    );
+    wire [31:0] IROUT;
+    TriggerEn IR(
+        .CLK(clk),
+        .nRST(RST),
+        .EN(IRWrite), 
+        .IN(ins),
+        .OUT(IROUT)
     );
 
     wire [5:0] op;
@@ -40,7 +48,7 @@ module CPU (
     wire [4:0] rd;
     wire [4:0] sftamt;
     Decoder decoder(
-        .ins(ins),
+        .ins(IROUT),
         .op(op),
         .func(func),
         .rs(rs),
@@ -59,9 +67,11 @@ module CPU (
     wire RegWr;
     wire nRD;
     wire nWR;
-    wire RegDst;
+    wire [1:0]RegDst;
     wire ExtSel;
     wire [2:0]ALUop;
+    wire RegWriteSrc;
+    wire IRWrite;
     CU cu(
         .Op(op),
         .Func(func),
@@ -76,17 +86,33 @@ module CPU (
         .RegDst(RegDst),
         .ExtSel(ExtSel),
         .PCSel(PCSel),
-        .ALUop(ALUop)
+        .ALUop(ALUop),
+        .RegWriteSrc(RegWriteSrc),
+        .IRWrite(IRWrite)
     );
 
     wire [31:0] ReadData1;
     wire [31:0] ReadData2;
     wire [4:0] WriteReg;
     assign WriteReg = RegDst == `FromRt ? rt : rd;
+    case (RegDst)
+        `FromRT : WriteReg = rt;
+        `FromRd : WriteReg = rd;
+        `FromR31 : WriteReg = 5'b11111;
+        default : WriteReg = 5'b0; // ERROR!
+    end
     wire [31:0] RegWriteData;
     wire [31:0] ALUResult;
     wire [31:0] RAMOut;
-    assign RegWriteData = DB == `FromALU ? ALUResult : RAMOut;
+    wire [31:0] DBDRIn;
+    assign DBDRIn = DB == `FromALU ? ALUResult : RAMOut;
+    Trigger DBDR(
+        .CLK(clk),
+        .nRST(RST),
+        .IN(DBDRIn),
+        .OUT(DBDROut)
+    );
+    RegWriteData = RegWriteSrc == `FromDBDR ? DBDROut : pc + 4; 
     RegFile regfile(
         .CLK(clk),
         .RST(RST),
@@ -98,6 +124,21 @@ module CPU (
         .ReadData1(ReadData1),
         .ReadData2(ReadData2)
     );
+    wire [31:0] ADROut;
+    Trigger ADR (
+        .CLK(clk),
+        .nRST(RST),
+        .IN(ReadData1),
+        .OUT(ADROut)
+    );
+    wire [31:0] BDROut;
+    Trigger BDR (
+        .CLK(clk),
+        .nRST(RST),
+        .IN(ReadData2),
+        .OUT(BDROut)
+    );
+
 
     wire [31:0] exd_immd;
     Extend extend(
@@ -108,10 +149,10 @@ module CPU (
 
     wire [31:0] ALUa;
     wire [31:0] zexd_sftamt;
-    assign zexd_sftamt = {{27{1'b0}}, sftamt}; //TODO can this work?
-    assign ALUa = ALUScrA == `FromData ? ReadData1 : zexd_sftamt;
+    assign zexd_sftamt = {{27{1'b0}}, sftamt}; 
+    assign ALUa = ALUScrA == `FromData ? ADROut : zexd_sftamt;
     wire [31:0] ALUb;
-    assign ALUb = ALUScrB == `FromData ? ReadData2 : exd_immd;
+    assign ALUb = ALUScrB == `FromData ? BDROut : exd_immd;
     ALU32 alu32(
         .ALUopcode(ALUop),
         .rega(ALUa),
@@ -120,11 +161,17 @@ module CPU (
         .zero(ZERO),
         .sign(SIGN)
     );
-
+    wire [31:0] ALUDROut;
+    Trigger ALUoutDR(
+        .CLK(clk),
+        .nRST(RST),
+        .IN(ALUResult),
+        .OUT(ALUDROut)
+    );
     RAM ram(
         .clk(clk),
-        .address(ALUResult),
-        .writeData(ReadData2),
+        .address(ALUDROut),
+        .writeData(BDROut),
         .nRD(nRD),
         .nWR(nWR),
         .Dataout(RAMOut)

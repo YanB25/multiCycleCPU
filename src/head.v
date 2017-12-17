@@ -28,7 +28,7 @@
 `define NextIns 2'b00
 `define RelJmp 2'b01 //relative jump
 `define AbsJmp 2'b10 //absolute jump
-`define HALT 2'b11 // halt
+`define RsJmp 2'b11 // Jump to Rs, by JR instrustion
 
 // for instruction
 // op code
@@ -59,3 +59,13 @@
 `define funcSLL 6'b000000
 `define funcSLT 6'b101010
 `define funcJR 6'b000001
+
+// for State in multicycle cpu
+`define sIF 3'b000
+`define sID 3'b001
+`define sEXE 3'b010
+`define sMEM 3'b011
+`define sWB 3'b100
+// for RegWriteSrc
+`define FromPCplus4 1'b0
+`define FromDBDR 1'b1

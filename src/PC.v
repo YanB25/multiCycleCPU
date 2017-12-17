@@ -2,12 +2,17 @@
 `include "head.v"
 module PC(
     input clk,
-    input RST,
+    input nRST,
     input [31:0]newpc,
+    input pcWrite,
     output reg [31:0]pc
     );
-    always@(posedge clk or negedge RST) begin
-        pc <= RST == 0 ? 0 : newpc;
+    always@(posedge clk or negedge nRST) begin
+        if (pcWrite || !nRST) begin
+            pc <= RST == 0 ? 0 : newpc;
+        end else begin
+            pc <= pc;
+        end
     end
 endmodule
 
@@ -16,6 +21,7 @@ module PCHelper(
     input [15:0] immd16,
     input [25:0] immd26,
     input [1:0] sel,
+    input [31:0] rs,
     output reg [31:0] newpc
     );
     initial begin
@@ -27,7 +33,7 @@ module PCHelper(
             `NextIns : newpc <= pc + 4;
             `RelJmp : newpc <= (pc + 4 + (exd_immd16 << 2));
             `AbsJmp : newpc <= {pc[31:28], immd26, 2'b00};
-            `HALT : newpc <= pc;
+            `RsJmp : newpc <= rs;
         endcase
     end
 endmodule

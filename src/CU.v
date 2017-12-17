@@ -1,54 +1,104 @@
 `include "head.v"
 `timescale 1ns / 1ps
+module State {
+    input CLK,
+    input [5:0] opCode,
+    input [5:0] func,
+    input nRST,
+    output reg [2:0] state
+    };
+    always@(posedge CLK or negedge nRST) begin
+        if (!nRST) begin
+            state <= `sIF;
+        end else if (state == `sIF) begin
+            state <= `sID;
+        end else begin
+            case (state) 
+                `sID : begin
+                    case (opCode)
+                        `opJ, `opHALT, `opJAL: state <= `sIF;
+                        `opJR: begin
+                        if (func == `funcJR) begin
+                            state <= `sIF;
+                        end else begin
+                            state <= `sEXE;
+                        end
+                        default : state <= `sEXE;
+                    endcase
+                end
+                `sEXE : begin
+                    case (opCode)
+                        `opBEQ, `opBNE, `opBGTZ : state <= `sIF;
+                        `opSW, `opLW : state <= `sMEM;
+                        default : state <= `sWB;
+                    endcase
+                end
+                `sMEM : begin
+                    case (opCode)
+                        `opSW : state <= `sIF;
+                        `opLW : state <= `sWB;
+                        default : state <= 3'b111; //ERROR!
+                    endcase
+                end
+                `sWB : state <= `sIF;
+            endcase
+        end
+    end
+endmodule   
+
+
 module CU (
+    input CLK,
     input [5:0]Op,
     input [5:0]Func,
     input ZERO,
     input SIGN,
+    input [3:0] state,
     output ALUScrA,
     output reg ALUScrB,
     output DB,
     output reg RegWr,
     output nRD,
     output nWR,
-    output RegDst,
+    output [1:0]RegDst,
     output ExtSel,
+    output RegWriteSrc,
     output reg [1:0]PCSel,
-    output reg [2:0]ALUop
+    output reg [2:0]ALUop,
+    output reg pcWrite,
+    output IRWrite
     );
     assign ALUScrA = (Op == `opSLL && Func == `funcSLL) ? `FromSA : `FromData;
     // ALUScrB
     always@(*) begin
         case (Op)
-            `opADDI, `opORI, `opSW, `opLW : ALUScrB = `FromImmd;
+            `opADDI, `opORI, `opSW, `opLW, `opSLTI: ALUScrB = `FromImmd;
             default : ALUScrB = `FromData;
         endcase
     end
     // DB
     assign DB = (Op == `opLW) ? `FromDM : `FromALU;
     //RegWr
-    always@(*) begin
-        case (Op)
-            `opSW, `opBEQ, `opBNE, `opBGTZ, `opJ, `opHALT : RegWr = 0;
-            default : RegWr = 1;
-        endcase
-    end
+    assign RegWr = (state == `sWB || Op == `opJAL) ? 1 : 0;
     // nRD
-    assign nRD = (Op == `opLW) ? 0 : 1;
+    assign nRD = (Op == `opLW && state == `sMEM) ? 0 : 1;
     // nWR
-    assign nWR = (Op == `opSW) ? 0: 1;
+    assign nWR = (Op == `opSW && state == `sMEM) ? 0: 1;
     // RegDst
-    assign RegDst = (Op == `opLW || Op ==`opADDI || Op == `opORI) ? `FromRt : `FromRd;
+    case (Op)
+        `opLW, `opADDI, `opORI, `opSLTI : RegDst = `FromRT;
+        `opJAL : RegDst = `FromR31;
+        default : RegDst = `FromRd;
+    endcase
     // ExtSel
     assign ExtSel = (Op == `opORI) ? `ZeroExd : `SignExd;
-    // PCSel
-    always@(*) begin
-        case (Op) 
+    // PCSel always@(*) begin
+           case (Op) 
             `opBEQ : PCSel = ZERO == 1 ? `RelJmp : `NextIns;
             `opBNE : PCSel = ZERO == 0 ? `RelJmp : `NextIns;
             `opBGTZ : PCSel = (SIGN == 0 && ZERO == 0) ? `RelJmp : `NextIns;
-            `opJ : PCSel = `AbsJmp;
-            `opHALT : PCSel = `HALT;
+            `opJ, `opJAL: PCSel = `AbsJmp;
+            `opJR : PCSel = Func == `funcJR ? `RsJmp : `NextIns;
             default : PCSel =  `NextIns;
         endcase
     end
@@ -69,9 +119,31 @@ module CU (
             end
             `opORI : ALUop = `ALUOr;
             `opBEQ, `opBNE, `opBGTZ : ALUop = `ALUSub;
+            `opSLTI : ALUop = `ALUCmps;
             default : ALUop = `ALUAdd;
         endcase
     end
+    // IRWrite
+    always@(negedge CLK) begin
+        IRWrite = state == `sIF ? 1 : 0;
+    end
+    // pcWrite
+    always@(negedge CLK) begin
+        case (Op)
+            `opADD, `opSUB, `opAND, `opOR, `opSLL, `opSLT, `opADDI, `opORI, `opSLTI, `opLW:
+                pcWrite = state == `sWB ? 1 : 0;
+            `opSW : pcWriter = state == `sMEM ? 1 : 0;
+            `opBEQ, `opBNE, `opBGTZ :
+                pcWrite = state == `sEXE ? 1 : 0;
+            `opJ, `opJAL:
+                pcWrite = state == `sID ? 1 : 0;
+            `opJR:
+                pcWrite == (Func == `funcJR && state == `sID) ? 1 : 0;
+            default : pcWrite = 0;
+        endcase
+    end
+    //RegWriteSrc
+    assign RegWriteSrc = Op == `opJAL ? `FromPCplus4 : `FromDBDR
 endmodule
             
 
