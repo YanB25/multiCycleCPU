@@ -17,6 +17,6 @@ module CPU_TB;
     end
     CPU cpu(
         .clk(CLK),
-        .nRST(RST)
+        .RST(RST)
     );
 endmodule

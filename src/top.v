@@ -7,6 +7,7 @@ module CPU (
     wire [3:0] pos_ctrl;
     wire [7:0] num_ctrl;
     wire [31:0] pc;
+    wire [4:0] rs;
     wire [31:0] newpc;
     wire [15:0] immd16;
     wire [25:0] immd26;
@@ -19,13 +20,14 @@ module CPU (
         .pc(pc),
         .pcWrite(pcWrite)
     );
-
+    wire [31:0] ReadData1;
     PCHelper pchelper(
         .pc(pc),
         .immd16(immd16),
         .immd26(immd26),
         .sel(PCSel),
-        .newpc(newpc)
+        .newpc(newpc),
+        .rs(ReadData1)
     );
     wire [31:0] ins;
     wire romnrd = 0;
@@ -46,7 +48,6 @@ module CPU (
 
     wire [5:0] op;
     wire [5:0] func;
-    wire [4:0] rs;
     wire [4:0] rt;
     wire [4:0] rd;
     wire [4:0] sftamt;
@@ -76,13 +77,14 @@ module CPU (
     wire RegWriteSrc;
     wire [2:0] state;
     State stateinstance(
-        .CLK(CLK),
+        .CLK(clk),
         .nRST(RST),
         .opCode(op),
         .func(func),
         .state(state)
     );
     CU cu(
+        .CLK(clk),
         .Op(op),
         .Func(func),
         .ZERO(ZERO),
@@ -103,7 +105,7 @@ module CPU (
         .pcWrite(pcWrite)
     );
 
-    wire [31:0] ReadData1;
+    
     wire [31:0] ReadData2;
     reg [4:0] WriteReg;
     always@(*) begin
@@ -118,6 +120,7 @@ module CPU (
     wire [31:0] ALUResult;
     wire [31:0] RAMOut;
     wire [31:0] DBDRIn;
+    wire [31:0] DBDROut;
     assign DBDRIn = DB == `FromALU ? ALUResult : RAMOut;
     Trigger DBDR(
         .CLK(clk),

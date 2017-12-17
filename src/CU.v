@@ -54,7 +54,8 @@ module CU (
     input [5:0]Func,
     input ZERO,
     input SIGN,
-    input [3:0] state,
+    input [2:0] state,
+    input nRST,
     output ALUScrA,
     output reg ALUScrB,
     output DB,
@@ -128,14 +129,18 @@ module CU (
         endcase
     end
     // IRWrite
-    always@(negedge CLK) begin
-        IRWrite = state == `sIF ? 1 : 0;
+    always@(negedge CLK or negedge nRST) begin
+        if (!nRST) begin
+            IRWrite = 1;
+        end else begin
+            IRWrite = state == `sIF ? 1 : 0;
+        end
     end
     // pcWrite
     always@(negedge CLK) begin
         case (Op)
             `opRFormat:
-                case(Func):
+                case(Func)
                     `funcADD, `funcSUB, `funcAND, `funcOR, `funcSLL, `funcSLT:
                         pcWrite = state == `sWB ? 1 : 0;
                     `funcJR:
