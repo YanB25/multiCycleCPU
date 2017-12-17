@@ -7,7 +7,7 @@ module TriggerEn(
     input nRST,
     output reg [31:0] OUT
 );
-    always@(posedge CLK || negedge nRST) begin
+    always@(posedge CLK or negedge nRST) begin
         if (!nRST) begin
             OUT <= 32'b0;
         end else if (EN) begin

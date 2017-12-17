@@ -9,7 +9,7 @@ module PC(
     );
     always@(posedge clk or negedge nRST) begin
         if (pcWrite || !nRST) begin
-            pc <= RST == 0 ? 0 : newpc;
+            pc <= nRST == 0 ? 0 : newpc;
         end else begin
             pc <= pc;
         end

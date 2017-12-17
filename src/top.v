@@ -11,11 +11,13 @@ module CPU (
     wire [15:0] immd16;
     wire [25:0] immd26;
     wire [1:0]PCSel;
+    wire pcWrite;
     PC pcinstance(
         .clk(clk),
-        .RST(RST),
+        .nRST(RST),
         .newpc(newpc),
-        .pc(pc)
+        .pc(pc),
+        .pcWrite(pcWrite)
     );
 
     PCHelper pchelper(
@@ -33,6 +35,7 @@ module CPU (
         .dataOut(ins)
     );
     wire [31:0] IROUT;
+    wire IRWrite;
     TriggerEn IR(
         .CLK(clk),
         .nRST(RST),
@@ -71,7 +74,14 @@ module CPU (
     wire ExtSel;
     wire [2:0]ALUop;
     wire RegWriteSrc;
-    wire IRWrite;
+    wire [2:0] state;
+    State stateinstance(
+        .CLK(CLK),
+        .nRST(RST),
+        .opCode(op),
+        .func(func),
+        .state(state)
+    );
     CU cu(
         .Op(op),
         .Func(func),
@@ -88,18 +98,21 @@ module CPU (
         .PCSel(PCSel),
         .ALUop(ALUop),
         .RegWriteSrc(RegWriteSrc),
-        .IRWrite(IRWrite)
+        .IRWrite(IRWrite),
+        .state(state),
+        .pcWrite(pcWrite)
     );
 
     wire [31:0] ReadData1;
     wire [31:0] ReadData2;
-    wire [4:0] WriteReg;
-    assign WriteReg = RegDst == `FromRt ? rt : rd;
-    case (RegDst)
-        `FromRT : WriteReg = rt;
-        `FromRd : WriteReg = rd;
-        `FromR31 : WriteReg = 5'b11111;
-        default : WriteReg = 5'b0; // ERROR!
+    reg [4:0] WriteReg;
+    always@(*) begin
+        case (RegDst)
+            `FromRt : WriteReg = rt;
+            `FromRd : WriteReg = rd;
+            `FromR31 : WriteReg = 5'b11111;
+            default : WriteReg = 5'b0; // ERROR!
+        endcase
     end
     wire [31:0] RegWriteData;
     wire [31:0] ALUResult;
@@ -112,7 +125,7 @@ module CPU (
         .IN(DBDRIn),
         .OUT(DBDROut)
     );
-    RegWriteData = RegWriteSrc == `FromDBDR ? DBDROut : pc + 4; 
+    assign RegWriteData = RegWriteSrc == `FromDBDR ? DBDROut : pc + 4; 
     RegFile regfile(
         .CLK(clk),
         .RST(RST),

@@ -49,7 +49,7 @@
 `define opBNE 6'b000101
 `define opBGTZ 6'b000111
 `define opJ 6'b000010
-`define ojJAL 6'b011000
+`define opJAL 6'b011000
 `define opHALT 6'b111111
 // func code
 `define funcADD 6'b100000

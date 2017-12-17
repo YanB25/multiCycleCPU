@@ -1,12 +1,12 @@
 `include "head.v"
 `timescale 1ns / 1ps
-module State {
+module State (
     input CLK,
     input [5:0] opCode,
     input [5:0] func,
     input nRST,
     output reg [2:0] state
-    };
+    );
     always@(posedge CLK or negedge nRST) begin
         if (!nRST) begin
             state <= `sIF;
@@ -18,10 +18,11 @@ module State {
                     case (opCode)
                         `opJ, `opHALT, `opJAL: state <= `sIF;
                         `opJR: begin
-                        if (func == `funcJR) begin
-                            state <= `sIF;
-                        end else begin
-                            state <= `sEXE;
+                            if (func == `funcJR) begin
+                                state <= `sIF;
+                            end else begin
+                                state <= `sEXE;
+                            end
                         end
                         default : state <= `sEXE;
                     endcase
@@ -57,16 +58,16 @@ module CU (
     output ALUScrA,
     output reg ALUScrB,
     output DB,
-    output reg RegWr,
+    output RegWr,
     output nRD,
     output nWR,
-    output [1:0]RegDst,
+    output reg [1:0]RegDst,
     output ExtSel,
     output RegWriteSrc,
     output reg [1:0]PCSel,
     output reg [2:0]ALUop,
     output reg pcWrite,
-    output IRWrite
+    output reg IRWrite
     );
     assign ALUScrA = (Op == `opSLL && Func == `funcSLL) ? `FromSA : `FromData;
     // ALUScrB
@@ -85,14 +86,17 @@ module CU (
     // nWR
     assign nWR = (Op == `opSW && state == `sMEM) ? 0: 1;
     // RegDst
-    case (Op)
-        `opLW, `opADDI, `opORI, `opSLTI : RegDst = `FromRT;
-        `opJAL : RegDst = `FromR31;
-        default : RegDst = `FromRd;
-    endcase
+    always@(*) begin
+        case (Op)
+            `opLW, `opADDI, `opORI, `opSLTI : RegDst = `FromRt;
+            `opJAL : RegDst = `FromR31;
+            default : RegDst = `FromRd;
+        endcase
+    end
     // ExtSel
     assign ExtSel = (Op == `opORI) ? `ZeroExd : `SignExd;
-    // PCSel always@(*) begin
+    // PCSel 
+    always@(*) begin
            case (Op) 
             `opBEQ : PCSel = ZERO == 1 ? `RelJmp : `NextIns;
             `opBNE : PCSel = ZERO == 0 ? `RelJmp : `NextIns;
@@ -130,20 +134,26 @@ module CU (
     // pcWrite
     always@(negedge CLK) begin
         case (Op)
-            `opADD, `opSUB, `opAND, `opOR, `opSLL, `opSLT, `opADDI, `opORI, `opSLTI, `opLW:
+            `opRFormat:
+                case(Func):
+                    `funcADD, `funcSUB, `funcAND, `funcOR, `funcSLL, `funcSLT:
+                        pcWrite = state == `sWB ? 1 : 0;
+                    `funcJR:
+                        pcWrite = state == `sID ? 1 : 0;
+                    default: pcWrite = 0;
+                endcase
+            `opADDI, `opORI, `opSLTI, `opLW:
                 pcWrite = state == `sWB ? 1 : 0;
-            `opSW : pcWriter = state == `sMEM ? 1 : 0;
+            `opSW : pcWrite = state == `sMEM ? 1 : 0;
             `opBEQ, `opBNE, `opBGTZ :
                 pcWrite = state == `sEXE ? 1 : 0;
             `opJ, `opJAL:
                 pcWrite = state == `sID ? 1 : 0;
-            `opJR:
-                pcWrite == (Func == `funcJR && state == `sID) ? 1 : 0;
             default : pcWrite = 0;
         endcase
     end
     //RegWriteSrc
-    assign RegWriteSrc = Op == `opJAL ? `FromPCplus4 : `FromDBDR
+    assign RegWriteSrc = Op == `opJAL ? `FromPCplus4 : `FromDBDR;
 endmodule
             
 
